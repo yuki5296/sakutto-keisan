@@ -124,22 +124,28 @@ input[type="number"]:focus, select:focus { border-color: var(--accent2); }
 .big-num .sub { font-size: 13px; color: var(--sub); margin-top: 6px; }
 .note { font-size: 12px; color: var(--sub); margin-top: 14px; line-height: 1.6; }
 
-/* トップのツール一覧 */
-.tools { display: grid; grid-template-columns: 1fr; gap: 14px; }
+/* トップのツール一覧（コンパクトな行リスト：増えてもスクロールが伸びにくい） */
+.tools { display: grid; grid-template-columns: 1fr; gap: 8px; }
 a.tool {
-  display: block;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 14px;
+  align-items: center;
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 18px 16px;
+  border-radius: 12px;
+  padding: 12px 14px;
   text-decoration: none;
   color: var(--text);
   transition: .15s;
 }
-a.tool:hover { border-color: var(--accent2); transform: translateY(-2px); }
-a.tool .emoji { font-size: 26px; }
-a.tool .t-name { font-size: 17px; font-weight: 700; margin-top: 6px; }
-a.tool .t-desc { font-size: 13px; color: var(--sub); margin-top: 4px; line-height: 1.5; }
+a.tool:hover { border-color: var(--accent2); }
+a.tool .emoji { grid-row: 1 / 3; align-self: center; font-size: 23px; }
+a.tool .t-name { grid-column: 2; font-size: 15px; font-weight: 700; line-height: 1.3; }
+a.tool .t-desc {
+  grid-column: 2; font-size: 12px; color: var(--sub); margin-top: 2px; line-height: 1.45;
+  display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
+}
 
 .site-foot {
   margin-top: 36px; padding-top: 18px; border-top: 1px solid var(--line);
