@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>リアルタイム時給タイマー | サクッと計算</title>
+<meta name="description" content="時給を入れてスタートすると、働いている間の稼ぎがリアルタイムで増えていくタイマー。バイト中に眺めるとモチベ爆上がり。閉じても動き続けます。">
+<link rel="stylesheet" href="style.css">
+<style>
+  .timer-card { text-align:center; padding:26px 16px; }
+  .counter { font-size:46px; font-weight:800; color:var(--accent); font-variant-numeric:tabular-nums; letter-spacing:-1px; line-height:1.1; }
+  .elapsed { font-size:15px; color:var(--sub); margin-top:10px; font-variant-numeric:tabular-nums; }
+  .milestone { font-size:15px; color:var(--accent2); margin-top:14px; min-height:22px; font-weight:700; }
+  .status-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--sub); margin-right:6px; vertical-align:middle; }
+  .status-dot.live { background:var(--accent2); box-shadow:0 0 0 0 rgba(6,214,160,.6); animation:pulse 1.4s infinite; }
+  @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(6,214,160,.5);} 70%{box-shadow:0 0 0 8px rgba(6,214,160,0);} 100%{box-shadow:0 0 0 0 rgba(6,214,160,0);} }
+  .status { font-size:12px; color:var(--sub); margin-bottom:16px; }
+  .ctrl { display:flex; gap:10px; }
+  .ctrl button { flex:1; padding:15px; border-radius:12px; border:none; font:inherit; font-weight:800; font-size:16px; cursor:pointer; }
+  .btn-toggle { background:var(--accent2); color:#06121f; }
+  .btn-toggle.running { background:var(--accent); }
+  .btn-reset { flex:0 0 auto; background:#0d1120; border:1px solid var(--line)!important; color:var(--sub); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="site-head">
+    <a class="logo" href="index.html">サクッと計算<span class="dot">.</span></a>
+    <a class="back" href="index.html">← ツール一覧</a>
+  </header>
+
+  <h1>⏱️ リアルタイム時給タイマー</h1>
+  <p class="lead">働いてる間、稼ぎがチャリンチャリン増えていく。</p>
+
+  <div class="card">
+    <div class="field" style="margin-bottom:0;">
+      <label>時給（円）</label>
+      <input type="number" id="wage" inputmode="numeric" placeholder="例：1100" />
+    </div>
+  </div>
+
+  <div class="card timer-card">
+    <div class="status"><span class="status-dot" id="dot"></span><span id="statusText">停止中</span></div>
+    <div class="counter" id="counter">¥0.00</div>
+    <div class="elapsed" id="elapsed">0時間00分00秒</div>
+    <div class="milestone" id="milestone"></div>
+  </div>
+
+  <div class="card">
+    <div class="ctrl">
+      <button class="btn-toggle" id="toggle">▶ スタート</button>
+      <button class="btn-reset" id="reset">リセット</button>
+    </div>
+    <div class="note" style="margin-bottom:0;">※ スタート後は、このページを閉じても・スマホをロックしても、裏で時間がカウントされ続けます（開始時刻を保存して計算）。「休憩」で一時停止、「リセット」でゼロに戻ります。</div>
+  </div>
+
+  <footer class="site-foot">
+    <div>
+      <a href="about.html">このサイトについて</a>
+      <a href="privacy.html">プライバシーポリシー</a>
+      <a href="contact.html">お問い合わせ</a>
+    </div>
+    <div>© サクッと計算</div>
+  </footer>
+</div>
+
+<script>
+const KEY = "sakutto_jikyu_v1";
+let st = loadState();
+let timer = null;
+
+const MILESTONES = [
+  {a:100,   m:"最初の100円💰"},
+  {a:500,   m:"ワンコイン突破🪙"},
+  {a:1000,  m:"ランチ代ゲット🍙"},
+  {a:3000,  m:"飲み会いけるね🍻"},
+  {a:5000,  m:"いい稼ぎ！🔥"},
+  {a:8000,  m:"日給水準だ💪"},
+  {a:10000, m:"1万円達成🎉"},
+  {a:30000, m:"絶好調！🚀"},
+  {a:50000, m:"5万円！働き者すぎ👑"},
+];
+
+function loadState(){
+  try { return Object.assign({wage:null, accMs:0, startAt:null, running:false}, JSON.parse(localStorage.getItem(KEY))||{}); }
+  catch(e){ return {wage:null, accMs:0, startAt:null, running:false}; }
+}
+function save(){ localStorage.setItem(KEY, JSON.stringify(st)); }
+
+function elapsedMs(){ return st.accMs + (st.running && st.startAt ? Date.now() - st.startAt : 0); }
+function money(){ return elapsedMs()/1000 * (Number(st.wage)||0) / 3600; }
+
+function fmtTime(totalSec){
+  const s=Math.floor(totalSec)%60, m=Math.floor(totalSec/60)%60, h=Math.floor(totalSec/3600);
+  return h + "時間" + String(m).padStart(2,"0") + "分" + String(s).padStart(2,"0") + "秒";
+}
+function milestoneFor(yen){
+  let msg = "";
+  for(const ms of MILESTONES){ if(yen >= ms.a) msg = ms.m; }
+  return msg;
+}
+
+function render(){
+  const yen = money();
+  document.getElementById("counter").textContent = "¥" + yen.toLocaleString("ja-JP",{minimumFractionDigits:2, maximumFractionDigits:2});
+  document.getElementById("elapsed").textContent = fmtTime(elapsedMs()/1000);
+  document.getElementById("milestone").textContent = milestoneFor(yen);
+}
+function updateUI(){
+  const t = document.getElementById("toggle");
+  const dot = document.getElementById("dot");
+  const stt = document.getElementById("statusText");
+  if(st.running){
+    t.textContent = "⏸ 休憩（一時停止）"; t.classList.add("running");
+    dot.classList.add("live"); stt.textContent = "稼働中…";
+  } else {
+    t.textContent = (st.accMs>0 ? "▶ 再開" : "▶ スタート"); t.classList.remove("running");
+    dot.classList.remove("live"); stt.textContent = (st.accMs>0 ? "一時停止中" : "停止中");
+  }
+}
+function startLoop(){ if(timer) return; timer = setInterval(render, 50); }
+function stopLoop(){ if(timer){ clearInterval(timer); timer = null; } }
+
+document.getElementById("wage").addEventListener("input", e=>{
+  st.wage = e.target.value === "" ? null : Number(e.target.value);
+  save(); render();
+});
+document.getElementById("toggle").addEventListener("click", ()=>{
+  if(!st.wage || st.wage<=0){ alert("先に時給を入れてね"); document.getElementById("wage").focus(); return; }
+  if(st.running){
+    st.accMs = elapsedMs(); st.running = false; st.startAt = null; stopLoop();
+  } else {
+    st.startAt = Date.now(); st.running = true; startLoop();
+  }
+  save(); render(); updateUI();
+});
+document.getElementById("reset").addEventListener("click", ()=>{
+  if(st.accMs>0 || st.running){ if(!confirm("ゼロに戻していい？")) return; }
+  st.accMs = 0; st.startAt = null; st.running = false; stopLoop();
+  save(); render(); updateUI();
+});
+
+// 初期化（リロードしても続きから）
+document.getElementById("wage").value = st.wage!=null ? st.wage : "";
+render(); updateUI();
+if(st.running) startLoop();
+</script>
+</body>
+</html>
