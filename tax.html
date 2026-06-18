@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>税込・税抜・割引 計算 | サクッと計算</title>
+<meta name="description" content="金額を入れるだけで税抜・消費税額・税込を一発計算。さらに「○%OFF」の割引後価格も計算できます。消費税8%・10%対応。無料・登録不要。">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="site-head">
+    <a class="logo" href="index.html">サクッと計算<span class="dot">.</span></a>
+    <a class="back" href="index.html">← ツール一覧</a>
+  </header>
+
+  <h1>🧾 税込・税抜・割引 計算</h1>
+  <p class="lead">税の計算も、セールの割引計算も、ここで。</p>
+
+  <div class="card">
+    <div class="field" style="margin-bottom:0;">
+      <div class="seg" id="calcMode">
+        <button data-mode="tax" class="active">税の計算</button>
+        <button data-mode="disc">割引の計算</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 税の計算 -->
+  <div class="card" id="taxSection">
+    <div class="field">
+      <label>入力した金額は？</label>
+      <div class="seg" id="inputType">
+        <button data-type="excl" class="active">税抜の金額</button>
+        <button data-type="incl">税込の金額</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>金額（円）</label>
+      <input type="number" id="amount" inputmode="numeric" placeholder="例：1000" />
+    </div>
+    <div class="field" style="margin-bottom:0;">
+      <label>消費税率</label>
+      <div class="seg" id="rate">
+        <button data-rate="10" class="active">10%</button>
+        <button data-rate="8">8%（軽減）</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 割引の計算 -->
+  <div class="card" id="discSection" style="display:none;">
+    <div class="field">
+      <label>元の価格（税抜・円）</label>
+      <input type="number" id="origPrice" inputmode="numeric" placeholder="例：5000" />
+    </div>
+    <div class="field">
+      <label>割引率（%）</label>
+      <input type="number" id="discRate" inputmode="numeric" placeholder="例：20" />
+      <div class="hint">「20」と入れると20%OFF。</div>
+    </div>
+    <div class="field" style="margin-bottom:0;">
+      <label>消費税率（税込も出します）</label>
+      <div class="seg" id="rate2">
+        <button data-rate="10" class="active">10%</button>
+        <button data-rate="8">8%（軽減）</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card result" id="result"></div>
+  <div class="err" id="err"></div>
+
+  <footer class="site-foot">
+    <div>
+      <a href="about.html">このサイトについて</a>
+      <a href="privacy.html">プライバシーポリシー</a>
+      <a href="contact.html">お問い合わせ</a>
+    </div>
+    <div>© サクッと計算</div>
+  </footer>
+</div>
+
+<script>
+let calcMode = "tax";
+let inputType = "excl";
+let rate = 10;    // 税の計算用
+let rate2 = 10;   // 割引の計算用
+
+function bindSeg(containerId, onPick) {
+  document.querySelectorAll("#" + containerId + " button").forEach(b => {
+    b.addEventListener("click", () => {
+      document.querySelectorAll("#" + containerId + " button").forEach(e => e.classList.remove("active"));
+      b.classList.add("active");
+      onPick(b);
+      calc();
+    });
+  });
+}
+bindSeg("calcMode", b => {
+  calcMode = b.dataset.mode;
+  document.getElementById("taxSection").style.display  = calcMode === "tax"  ? "" : "none";
+  document.getElementById("discSection").style.display = calcMode === "disc" ? "" : "none";
+});
+bindSeg("inputType", b => inputType = b.dataset.type);
+bindSeg("rate",  b => rate  = parseInt(b.dataset.rate, 10));
+bindSeg("rate2", b => rate2 = parseInt(b.dataset.rate, 10));
+["amount", "origPrice", "discRate"].forEach(id => document.getElementById(id).addEventListener("input", calc));
+
+function yen(n) { return "¥" + n.toLocaleString("ja-JP"); }
+function row(label, value, color) {
+  return `<div class="payer"><div class="who">${label}</div><div class="yen" style="color:${color}">${value}</div></div>`;
+}
+
+function calc() {
+  const resultEl = document.getElementById("result");
+  document.getElementById("err").textContent = "";
+  resultEl.classList.remove("show");
+
+  if (calcMode === "tax") {
+    const amount = parseFloat(document.getElementById("amount").value);
+    if (!amount || amount <= 0) return;
+    const r = rate / 100;
+    let excl, incl, tax;
+    if (inputType === "excl") {
+      excl = amount; tax = Math.floor(excl * r); incl = excl + tax;
+    } else {
+      incl = amount; excl = Math.floor(incl / (1 + r) + 1e-6); tax = incl - excl;
+    }
+    resultEl.innerHTML =
+      row("税抜価格", yen(excl), "var(--accent3)") +
+      row(`消費税（${rate}%）`, yen(tax), "var(--sub)") +
+      row("税込価格", yen(incl), "var(--accent)") +
+      `<div class="note">※ 消費税の端数は「切り捨て」で計算しています（店舗により切り上げ・四捨五入の場合あり）。</div>`;
+    resultEl.classList.add("show");
+
+  } else {
+    const orig = parseFloat(document.getElementById("origPrice").value);
+    const d = parseFloat(document.getElementById("discRate").value);
+    if (!orig || orig <= 0) return;
+    if (isNaN(d) || d < 0) return;
+    const r = rate2 / 100;
+    const afterExcl = Math.floor(orig * (1 - d / 100));   // 割引後（税抜）
+    const off = orig - afterExcl;                          // 値引き額
+    const afterIncl = Math.floor(afterExcl * (1 + r) + 1e-6); // 割引後の税込
+    resultEl.innerHTML =
+      `<div class="big-num"><span class="v">${yen(afterExcl)}</span><span class="u">に！</span>` +
+      `<div class="sub">元値 ${yen(orig)} から ${off > 0 ? yen(off) + " お得" : "割引なし"}（${d || 0}%OFF）</div></div>` +
+      row("割引後（税抜）", yen(afterExcl), "var(--accent3)") +
+      row(`割引後の税込（${rate2}%）`, yen(afterIncl), "var(--accent)") +
+      `<div class="note">※ 元の価格を「税抜」として計算しています。割引後の端数・消費税は切り捨て。</div>`;
+    resultEl.classList.add("show");
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>フライトマイル距離計算 | サクッと計算</title>
+<meta name="description" content="出発・到着の空港を選ぶだけで、区間距離（km・マイル）と貯まるマイルの概算を表示。世界の主要空港に対応。ANA・JALなどの積算率を選べます。">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="site-head">
+    <a class="logo" href="index.html">サクッと計算<span class="dot">.</span></a>
+    <a class="back" href="index.html">← ツール一覧</a>
+  </header>
+
+  <h1>✈️ フライトマイル距離計算</h1>
+  <p class="lead">区間を選ぶと、距離と貯まるマイルの目安を表示。</p>
+
+  <div class="card">
+    <div class="field">
+      <label>出発空港</label>
+      <select id="from"></select>
+    </div>
+    <div class="field">
+      <label>到着空港</label>
+      <select id="to"></select>
+    </div>
+    <div class="field">
+      <label>区間</label>
+      <div class="seg" id="trip">
+        <button data-trip="1" class="active">片道</button>
+        <button data-trip="2">往復</button>
+      </div>
+    </div>
+    <div class="field" style="margin-bottom:0;">
+      <label>積算率（%）— 運賃クラスや会員で変わります</label>
+      <input type="number" id="rate" inputmode="numeric" value="100" />
+      <div class="hint">目安：エコノミー正規 100% ／ 割引運賃 50〜70% ／ ビジネス 125〜150%。お持ちの運賃の積算率を入れてください。</div>
+    </div>
+  </div>
+
+  <div class="card result" id="result"></div>
+  <div class="err" id="err"></div>
+
+  <div class="card">
+    <div class="note" style="margin-top:0;">
+      <b>この計算について</b><br>
+      表示される距離は2空港間の「大圏距離（地球上の最短距離）」をもとにした<b>概算</b>です。航空会社が実際の積算に使う区間マイル（TPM）とは数十マイル程度ずれることがあります。正確なマイル数は各航空会社の公式サイトでご確認ください。
+    </div>
+  </div>
+
+  <footer class="site-foot">
+    <div>
+      <a href="about.html">このサイトについて</a>
+      <a href="privacy.html">プライバシーポリシー</a>
+      <a href="contact.html">お問い合わせ</a>
+    </div>
+    <div>© サクッと計算</div>
+  </footer>
+</div>
+
+<script src="mile_airports.js"></script>
+<script>
+let trip = 1;
+
+// 地域ごとにoptgroupで空港を並べる
+function fillSelect(sel, selectedCode) {
+  REGION_ORDER.forEach(region => {
+    const group = AIRPORTS.filter(a => a.r === region);
+    if (!group.length) return;
+    const og = document.createElement("optgroup");
+    og.label = region;
+    group.forEach(a => {
+      const opt = document.createElement("option");
+      opt.value = a.c;
+      opt.textContent = `${a.n}（${a.c}）`;
+      if (a.c === selectedCode) opt.selected = true;
+      og.appendChild(opt);
+    });
+    sel.appendChild(og);
+  });
+}
+fillSelect(document.getElementById("from"), "HND");
+fillSelect(document.getElementById("to"), "OKA");
+
+document.querySelectorAll("#trip button").forEach(b => {
+  b.addEventListener("click", () => {
+    trip = parseInt(b.dataset.trip, 10);
+    document.querySelectorAll("#trip button").forEach(e => e.classList.remove("active"));
+    b.classList.add("active"); calc();
+  });
+});
+["from", "to", "rate"].forEach(id => document.getElementById(id).addEventListener("input", calc));
+
+// 大圏距離（ハバーサインの公式）→ km
+function distanceKm(a, b) {
+  const R = 6371; // 地球の半径(km)
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(b.la - a.la);
+  const dLon = toRad(b.lo - a.lo);
+  const lat1 = toRad(a.la), lat2 = toRad(b.la);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function calc() {
+  const fromC = document.getElementById("from").value;
+  const toC = document.getElementById("to").value;
+  const rate = parseFloat(document.getElementById("rate").value);
+  const resultEl = document.getElementById("result");
+  const errEl = document.getElementById("err");
+  errEl.textContent = "";
+  resultEl.classList.remove("show");
+
+  if (fromC === toC) { errEl.textContent = "出発と到着が同じ空港です"; return; }
+  const a = AIRPORTS.find(x => x.c === fromC);
+  const b = AIRPORTS.find(x => x.c === toC);
+  if (!a || !b) return;
+
+  const km = distanceKm(a, b);
+  const mi = km * 0.621371;            // 区間距離(マイル)
+  const totalMi = mi * trip;           // 往復なら2倍
+  const totalKm = km * trip;
+  const r = (!rate || rate <= 0) ? 0 : rate;
+  const earned = Math.round(totalMi * r / 100);
+  const tripLabel = trip === 2 ? "往復" : "片道";
+
+  resultEl.innerHTML = `
+    <div class="total-line">${a.n}（${a.c}） ⇄ ${b.n}（${b.c}）／${tripLabel}</div>
+    <div class="big-num">
+      <span class="v">${earned.toLocaleString("ja-JP")}</span><span class="u">マイル（概算）</span>
+      <div class="sub">積算率 ${r}% で計算</div>
+    </div>
+    <div class="payer"><div class="who">区間距離</div><div class="yen" style="font-size:18px;color:var(--accent3)">${Math.round(totalMi).toLocaleString("ja-JP")} <span style="font-size:13px;color:var(--sub)">マイル</span></div></div>
+    <div class="payer"><div class="who">　</div><div class="yen" style="font-size:18px;color:var(--sub)">約 ${Math.round(totalKm).toLocaleString("ja-JP")} km</div></div>
+  `;
+  resultEl.classList.add("show");
+}
+calc();
+</script>
+</body>
+</html>

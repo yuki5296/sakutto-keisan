@@ -1,0 +1,4 @@
+# マイル空港データの作業用元ファイル（サイト本体には不要）
+airports.dat
+airports_extracted.json
+.DS_Store

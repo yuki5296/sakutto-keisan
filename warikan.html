@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>シチュエーション割り勘 | サクッと計算</title>
+<meta name="description" content="「同期割り」「下っ端の割り勘」「気前のいい割り勘」など、シチュエーション別に傾斜をつけて割り勘できる計算ツール。">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="site-head">
+    <a class="logo" href="index.html">サクッと計算<span class="dot">.</span></a>
+    <a class="back" href="index.html">← ツール一覧</a>
+  </header>
+
+  <h1>🍻 シチュエーション割り勘</h1>
+  <p class="lead">「誰が多めに払う？」を選ぶだけ。</p>
+
+  <div class="card">
+    <div class="field">
+      <label>合計金額（円）</label>
+      <input type="number" id="total" inputmode="numeric" placeholder="例：10000" />
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>多く払う人</label>
+        <input type="number" id="high" inputmode="numeric" placeholder="先輩など" />
+        <div class="hint">先輩・おごる側</div>
+      </div>
+      <div class="field">
+        <label>少なく払う人</label>
+        <input type="number" id="low" inputmode="numeric" placeholder="後輩など" />
+        <div class="hint">後輩・若手</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <label style="margin-bottom:12px;">割り勘のスタイル</label>
+    <div class="modes" id="modes"></div>
+  </div>
+
+  <div class="card result" id="result"></div>
+  <div class="err" id="err"></div>
+
+  <footer class="site-foot">
+    <div>
+      <a href="about.html">このサイトについて</a>
+      <a href="privacy.html">プライバシーポリシー</a>
+      <a href="contact.html">お問い合わせ</a>
+    </div>
+    <div>© サクッと計算</div>
+  </footer>
+</div>
+
+<script>
+const MODES = [
+  { id: "flat",   name: "同期割り（フラット）", desc: "全員きっちり均等。端数だけ誰かが被る。", high: 1.0, low: 1.0 },
+  { id: "junior", name: "下っ端の割り勘",       desc: "上の人が多め・後輩は控えめ（上 1.5 / 下 0.7）。", high: 1.5, low: 0.7 },
+  { id: "treat",  name: "気前のいい割り勘",     desc: "おごる側がドンと多めに。後輩は安く（上 2.5 / 下 0.8）。", high: 2.5, low: 0.8 },
+];
+let activeMode = "junior";
+
+const modesEl = document.getElementById("modes");
+MODES.forEach(m => {
+  const btn = document.createElement("button");
+  btn.className = "mode" + (m.id === activeMode ? " active" : "");
+  btn.innerHTML = `<span class="name">${m.name}</span><span class="desc">${m.desc}</span>`;
+  btn.addEventListener("click", () => {
+    activeMode = m.id;
+    document.querySelectorAll(".mode").forEach(e => e.classList.remove("active"));
+    btn.classList.add("active");
+    calc();
+  });
+  modesEl.appendChild(btn);
+});
+["total", "high", "low"].forEach(id => document.getElementById(id).addEventListener("input", calc));
+
+function yen(n) { return "¥" + n.toLocaleString("ja-JP"); }
+
+function calc() {
+  const total = parseInt(document.getElementById("total").value, 10);
+  const H = parseInt(document.getElementById("high").value, 10) || 0;
+  const L = parseInt(document.getElementById("low").value, 10) || 0;
+  const resultEl = document.getElementById("result");
+  const errEl = document.getElementById("err");
+  errEl.textContent = "";
+  resultEl.classList.remove("show");
+
+  if (!total || total <= 0) return;
+  if (H + L <= 0) { errEl.textContent = "人数を入れてね"; return; }
+
+  const mode = MODES.find(m => m.id === activeMode);
+  const totalWeight = mode.high * H + mode.low * L;
+
+  let lowEach = 0, lowTotal = 0;
+  if (L > 0) { lowEach = Math.floor(total * mode.low / totalWeight); lowTotal = lowEach * L; }
+  const highTotal = total - lowTotal;
+
+  if (H <= 0) {
+    lowEach = Math.floor(total / L);
+    const rem = total - lowEach * L;
+    let html = `<div class="total-line">合計 <b>${yen(total)}</b> を ${L}人で</div>`;
+    if (rem > 0) {
+      html += payerRow("low", "支払い", `${rem}人`, lowEach + 1);
+      html += payerRow("low", "支払い", `残り ${L - rem}人`, lowEach);
+    } else {
+      html += payerRow("low", "支払い", `${L}人`, lowEach);
+    }
+    resultEl.innerHTML = html; resultEl.classList.add("show"); return;
+  }
+
+  const highBase = Math.floor(highTotal / H);
+  const highPlusCount = highTotal - highBase * H;
+
+  let html = `<div class="total-line">合計 <b>${yen(total)}</b> を ${H + L}人で</div>`;
+  if (highPlusCount > 0) {
+    html += payerRow("high", "多く払う人", `${H}人のうち ${highPlusCount}人`, highBase + 1);
+    if (H - highPlusCount > 0) html += payerRow("high", "多く払う人", `残り ${H - highPlusCount}人`, highBase);
+  } else {
+    html += payerRow("high", "多く払う人", `${H}人`, highBase);
+  }
+  if (L > 0) html += payerRow("low", "少なく払う人", `${L}人`, lowEach);
+  html += `<div class="note">※ 1円単位で割り切れない分は「多く払う側」が被ります（後輩を1円でも安く）。</div>`;
+  resultEl.innerHTML = html;
+  resultEl.classList.add("show");
+}
+function payerRow(cls, who, tag, amount) {
+  return `<div class="payer ${cls}"><div class="who">${who}<span class="tag">${tag}</span></div><div class="yen">${yen(amount)}</div></div>`;
+}
+</script>
+</body>
+</html>
