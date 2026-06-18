@@ -33,6 +33,15 @@ body {
 .site-head .back { font-size: 13px; color: var(--sub); text-decoration: none; }
 .site-head .back:hover { color: var(--text); }
 
+/* ツール／読み物 切替タブ */
+.nav-tabs { display: flex; gap: 8px; margin: 4px 0 22px; }
+.nav-tabs a {
+  flex: 1; text-align: center; padding: 11px 8px; border-radius: 11px;
+  border: 1px solid var(--line); background: #0d1120; color: var(--sub);
+  text-decoration: none; font-weight: 700; font-size: 14px;
+}
+.nav-tabs a.active { background: #20253c; border-color: var(--accent); color: var(--accent); }
+
 h1 { font-size: 22px; text-align: center; margin: 6px 0 2px; }
 .lead { text-align: center; color: var(--sub); font-size: 13px; margin: 0 0 22px; }
 
