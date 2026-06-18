@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>バイト代カレンダー | サクッと計算</title>
+<meta name="description" content="シフトをカレンダーに入れるだけで、月の収入と年間の合計を自動計算。学生バイト向け。扶養の上限まであといくらかも分かる。複数人で使えてブラウザに保存。">
+<link rel="stylesheet" href="style.css">
+<style>
+  .cal-nav { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .cal-nav button { background:#0d1120; border:1px solid var(--line); color:var(--text); border-radius:10px; width:40px; height:36px; font-size:18px; cursor:pointer; }
+  .cal-nav .ym { font-size:17px; font-weight:700; }
+  .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+  .cal-head { text-align:center; font-size:11px; color:var(--sub); padding:4px 0; }
+  .cal-head.sun { color:#ff7b7b; } .cal-head.sat { color:#6db5ff; }
+  .cal-day { position:relative; aspect-ratio:1/1; background:#0d1120; border:1px solid var(--line); border-radius:8px; cursor:pointer; padding:3px 4px; display:flex; flex-direction:column; overflow:hidden; }
+  .cal-day:hover { border-color:var(--accent2); }
+  .cal-day.empty { background:transparent; border:none; cursor:default; }
+  .cal-day .d { font-size:11px; color:var(--sub); }
+  .cal-day.sun .d { color:#ff7b7b; } .cal-day.sat .d { color:#6db5ff; }
+  .cal-day .pay { margin-top:auto; font-size:11px; font-weight:700; color:var(--accent); line-height:1.2; }
+  .cal-day .hrs { font-size:9px; color:var(--sub); }
+  .cal-day.has { background:#20253c; border-color:var(--accent); }
+  .cal-day.today .d { background:var(--accent3); color:#06121f; border-radius:4px; padding:0 4px; font-weight:700; }
+  /* モーダル */
+  .overlay { position:fixed; inset:0; background:rgba(5,8,15,.7); display:none; align-items:center; justify-content:center; padding:16px; z-index:10; }
+  .overlay.show { display:flex; }
+  .modal { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px 16px; width:100%; max-width:340px; }
+  .modal h3 { margin:0 0 14px; font-size:16px; }
+  .modal .row2 { display:flex; gap:10px; }
+  .modal .row2 .field { flex:1; }
+  input[type="time"] { width:100%; font-size:18px; padding:10px 12px; border-radius:10px; border:1px solid var(--line); background:#0d1120; color:var(--text); }
+  .modal-btns { display:flex; gap:8px; margin-top:16px; }
+  .modal-btns button { flex:1; padding:11px; border-radius:10px; border:none; font:inherit; font-weight:700; cursor:pointer; }
+  .btn-save { background:var(--accent); color:#06121f; }
+  .btn-del { background:transparent; border:1px solid #ff6b6b!important; color:#ff6b6b; }
+  .btn-close { background:#0d1120; border:1px solid var(--line)!important; color:var(--sub); }
+  .preview-pay { text-align:center; font-size:14px; color:var(--accent2); margin-top:6px; min-height:18px; }
+  .prof-row { display:flex; gap:8px; align-items:center; }
+  .prof-row select { flex:1; }
+  .icon-btn { background:#0d1120; border:1px solid var(--line); color:var(--text); border-radius:10px; height:44px; min-width:44px; font-size:18px; cursor:pointer; }
+  .sumgrid { display:flex; gap:10px; text-align:center; }
+  .sumgrid > div { flex:1; }
+  .sumgrid .v { font-size:20px; font-weight:800; }
+  .sumgrid .lab { font-size:11px; color:var(--sub); }
+  .limit-warn { color:#ff6b6b!important; }
+  .empty-note { text-align:center; color:var(--sub); font-size:13px; padding:10px; }
+  .howto { background:#16233a; border-color:var(--accent3)!important; }
+  .howto .ht-title { font-weight:700; margin-bottom:8px; font-size:14px; }
+  .howto ol { margin:0; padding-left:20px; font-size:13px; color:#cfd5e3; line-height:1.95; }
+  .onboard { text-align:center; padding:8px 0 4px; }
+  .onboard-btn { background:var(--accent); color:#06121f; border:none; font:inherit; font-weight:800; font-size:16px; padding:14px 22px; border-radius:12px; cursor:pointer; }
+  .onboard .sub { color:var(--sub); font-size:12px; margin-top:8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="site-head">
+    <a class="logo" href="index.html">サクッと計算<span class="dot">.</span></a>
+    <a class="back" href="index.html">← ツール一覧</a>
+  </header>
+
+  <h1>🗓️ バイト代カレンダー</h1>
+  <p class="lead">シフトを入れるだけで、月収と年間の合計を自動計算。</p>
+
+  <!-- プロフィール -->
+  <div class="card">
+    <label>だれの記録？</label>
+    <div class="prof-row">
+      <select id="profile"></select>
+      <button class="icon-btn" id="addProf" title="人を追加">＋</button>
+      <button class="icon-btn" id="delProf" title="この人を削除">🗑</button>
+    </div>
+    <div class="row" style="margin-top:14px;">
+      <div class="field" style="margin-bottom:0;">
+        <label>時給（円）</label>
+        <input type="number" id="wage" inputmode="numeric" placeholder="例：1100" />
+      </div>
+      <div class="field" style="margin-bottom:0;">
+        <label>年間の上限（円・任意）</label>
+        <input type="number" id="limit" inputmode="numeric" placeholder="例：1230000" />
+        <div class="hint">扶養の壁など。空欄でもOK</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 使い方 -->
+  <div class="card howto">
+    <div class="ht-title">📖 使い方（3ステップ）</div>
+    <ol>
+      <li>「<b>＋</b>」ボタンで<b>名前を追加</b>（兄弟・掛け持ちなど複数人OK）</li>
+      <li><b>時給</b>を入れる（必要なら「年間の上限」も）</li>
+      <li>カレンダーの<b>日をタップ</b>してシフトの時刻を入力 → 月収・年間が自動で出る</li>
+    </ol>
+  </div>
+
+  <!-- 集計 -->
+  <div class="card">
+    <div class="sumgrid">
+      <div><div class="v" id="sumMonth" style="color:var(--accent)">¥0</div><div class="lab" id="sumMonthLab">今月</div></div>
+      <div><div class="v" id="sumYear" style="color:var(--accent3)">¥0</div><div class="lab" id="sumYearLab">年間累計</div></div>
+      <div><div class="v" id="sumLeft" style="color:var(--accent2)">—</div><div class="lab">上限まで</div></div>
+    </div>
+  </div>
+
+  <!-- カレンダー -->
+  <div class="card">
+    <div class="cal-nav">
+      <button id="prevM">‹</button>
+      <span class="ym" id="ymLabel"></span>
+      <button id="nextM">›</button>
+    </div>
+    <div class="cal-grid" id="calHead"></div>
+    <div class="cal-grid" id="calendar" style="margin-top:4px;"></div>
+    <div class="onboard" id="onboard" style="display:none;">
+      <button class="onboard-btn" id="onboardBtn">＋ 名前を入れて始める</button>
+      <div class="sub">まず「だれの記録か」の名前を登録します</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="note" style="margin-top:0;">
+      ※ 入力はこの端末のブラウザに保存され、次に開いても残ります（別の端末とは共有されません）。実働時間 ＝ 終了−開始−休憩。日収は1円未満切り捨て。
+    </div>
+  </div>
+
+  <footer class="site-foot">
+    <div>
+      <a href="about.html">このサイトについて</a>
+      <a href="privacy.html">プライバシーポリシー</a>
+      <a href="contact.html">お問い合わせ</a>
+    </div>
+    <div>© サクッと計算</div>
+  </footer>
+</div>
+
+<!-- 日入力モーダル -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h3 id="modalDate">シフト入力</h3>
+    <div class="row2">
+      <div class="field" style="margin-bottom:10px;"><label>開始</label><input type="time" id="mStart" value="17:00"></div>
+      <div class="field" style="margin-bottom:10px;"><label>終了</label><input type="time" id="mEnd" value="22:00"></div>
+    </div>
+    <div class="row2">
+      <div class="field" style="margin-bottom:0;"><label>休憩（分）</label><input type="number" id="mBreak" inputmode="numeric" placeholder="0"></div>
+      <div class="field" style="margin-bottom:0;"><label>時給（任意・空欄でその人の時給）</label><input type="number" id="mWage" inputmode="numeric" placeholder="その日だけ変える時"></div>
+    </div>
+    <div class="preview-pay" id="mPreview"></div>
+    <div class="modal-btns">
+      <button class="btn-close" id="mClose">閉じる</button>
+      <button class="btn-del" id="mDel">削除</button>
+      <button class="btn-save" id="mSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const KEY = "sakutto_baito_v1";
+let state = loadState();
+let viewY, viewM, editKey = null;
+const now = new Date();
+viewY = now.getFullYear(); viewM = now.getMonth();
+
+function loadState(){ try { return JSON.parse(localStorage.getItem(KEY)) || {profiles:[],active:null}; } catch(e){ return {profiles:[],active:null}; } }
+function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
+function uid(){ return "p" + Date.now() + Math.floor(Math.random()*1000); }
+function pad(n){ return String(n).padStart(2,"0"); }
+function dkey(y,m,d){ return y + "-" + pad(m+1) + "-" + pad(d); }
+function yen(n){ return "¥" + Math.round(n).toLocaleString("ja-JP"); }
+function active(){ return state.profiles.find(p=>p.id===state.active) || null; }
+
+function diffMin(s,e){ // "HH:MM"
+  const [sh,sm]=s.split(":").map(Number), [eh,em]=e.split(":").map(Number);
+  let d=(eh*60+em)-(sh*60+sm); if(d<=0) d+=1440; return d; // 日跨ぎ対応
+}
+function shiftPay(sh, defWage){
+  const w = (sh.wage!==undefined && sh.wage!==null && sh.wage!=="") ? Number(sh.wage) : Number(defWage||0);
+  let mins = diffMin(sh.start, sh.end) - (Number(sh.brk)||0);
+  if(mins<0) mins=0;
+  return Math.floor(mins/60 * w);
+}
+function shiftHours(sh){
+  let mins = diffMin(sh.start, sh.end) - (Number(sh.brk)||0);
+  if(mins<0) mins=0; return mins/60;
+}
+
+/* ---- プロフィール ---- */
+const selEl = document.getElementById("profile");
+function renderProfiles(){
+  selEl.innerHTML = "";
+  state.profiles.forEach(p=>{
+    const o=document.createElement("option"); o.value=p.id; o.textContent=p.name;
+    if(p.id===state.active) o.selected=true; selEl.appendChild(o);
+  });
+  const p = active();
+  document.getElementById("wage").value = p && p.wage!=null ? p.wage : "";
+  document.getElementById("limit").value = p && p.limit!=null ? p.limit : "";
+  const empty = state.profiles.length === 0;
+  document.getElementById("onboard").style.display = empty ? "block" : "none";
+  document.getElementById("calendar").style.display = empty ? "none" : "grid";
+}
+selEl.addEventListener("change", ()=>{ state.active=selEl.value; save(); renderProfiles(); renderAll(); });
+function addProfile(){
+  const name = (prompt("名前を入力（例：たろう）")||"").trim();
+  if(!name) return;
+  const p={id:uid(),name:name,wage:null,limit:null,shifts:{}};
+  state.profiles.push(p); state.active=p.id; save(); renderProfiles(); renderAll();
+  document.getElementById("wage").focus();
+}
+document.getElementById("addProf").addEventListener("click", addProfile);
+document.getElementById("onboardBtn").addEventListener("click", addProfile);
+document.getElementById("delProf").addEventListener("click", ()=>{
+  const p=active(); if(!p) return;
+  if(!confirm("「"+p.name+"」の記録を全部削除する？")) return;
+  state.profiles = state.profiles.filter(x=>x.id!==p.id);
+  state.active = state.profiles[0] ? state.profiles[0].id : null;
+  save(); renderProfiles(); renderAll();
+});
+document.getElementById("wage").addEventListener("input", e=>{ const p=active(); if(!p)return; p.wage = e.target.value===""?null:Number(e.target.value); save(); renderAll(); });
+document.getElementById("limit").addEventListener("input", e=>{ const p=active(); if(!p)return; p.limit = e.target.value===""?null:Number(e.target.value); save(); renderAll(); });
+
+/* ---- カレンダー ---- */
+const WD=["日","月","火","水","木","金","土"];
+function renderHead(){
+  const h=document.getElementById("calHead"); h.innerHTML="";
+  WD.forEach((w,i)=>{ const d=document.createElement("div"); d.className="cal-head"+(i===0?" sun":i===6?" sat":""); d.textContent=w; h.appendChild(d); });
+}
+function renderCalendar(){
+  document.getElementById("ymLabel").textContent = viewY+"年 "+(viewM+1)+"月";
+  const cal=document.getElementById("calendar"); cal.innerHTML="";
+  const first=new Date(viewY,viewM,1).getDay();
+  const days=new Date(viewY,viewM+1,0).getDate();
+  const p=active();
+  for(let i=0;i<first;i++){ const e=document.createElement("div"); e.className="cal-day empty"; cal.appendChild(e); }
+  for(let d=1; d<=days; d++){
+    const wd=new Date(viewY,viewM,d).getDay();
+    const cell=document.createElement("div");
+    cell.className="cal-day"+(wd===0?" sun":wd===6?" sat":"");
+    if(viewY===now.getFullYear()&&viewM===now.getMonth()&&d===now.getDate()) cell.classList.add("today");
+    const k=dkey(viewY,viewM,d);
+    let inner='<span class="d">'+d+'</span>';
+    if(p && p.shifts[k]){
+      const sh=p.shifts[k];
+      cell.classList.add("has");
+      inner+='<span class="pay">'+yen(shiftPay(sh,p.wage))+'</span><span class="hrs">'+shiftHours(sh).toFixed(1)+'h</span>';
+    }
+    cell.innerHTML=inner;
+    cell.addEventListener("click", ()=>openEditor(k,d));
+    cal.appendChild(cell);
+  }
+}
+document.getElementById("prevM").addEventListener("click", ()=>{ viewM--; if(viewM<0){viewM=11;viewY--;} renderAll(); });
+document.getElementById("nextM").addEventListener("click", ()=>{ viewM++; if(viewM>11){viewM=0;viewY++;} renderAll(); });
+
+/* ---- 集計 ---- */
+function renderTotals(){
+  const p=active();
+  document.getElementById("sumMonthLab").textContent=(viewM+1)+"月";
+  document.getElementById("sumYearLab").textContent=viewY+"年 累計";
+  if(!p){ document.getElementById("sumMonth").textContent="¥0"; document.getElementById("sumYear").textContent="¥0"; document.getElementById("sumLeft").textContent="—"; return; }
+  let mTotal=0, yTotal=0;
+  const mPrefix=viewY+"-"+pad(viewM+1)+"-", yPrefix=viewY+"-";
+  for(const k in p.shifts){
+    const pay=shiftPay(p.shifts[k],p.wage);
+    if(k.startsWith(yPrefix)) yTotal+=pay;
+    if(k.startsWith(mPrefix)) mTotal+=pay;
+  }
+  document.getElementById("sumMonth").textContent=yen(mTotal);
+  document.getElementById("sumYear").textContent=yen(yTotal);
+  const leftEl=document.getElementById("sumLeft");
+  if(p.limit!=null && p.limit>0){
+    const left=p.limit-yTotal;
+    if(left>=0){ leftEl.textContent=yen(left); leftEl.classList.remove("limit-warn"); }
+    else { leftEl.textContent="超過 "+yen(-left); leftEl.classList.add("limit-warn"); }
+  } else { leftEl.textContent="—"; leftEl.classList.remove("limit-warn"); }
+}
+
+function renderAll(){ renderCalendar(); renderTotals(); }
+
+/* ---- 日入力モーダル ---- */
+const ov=document.getElementById("overlay");
+function openEditor(k,d){
+  if(!active()){ alert("先に「＋」で人を追加してね"); return; }
+  editKey=k;
+  const p=active(), sh=p.shifts[k];
+  document.getElementById("modalDate").textContent=viewY+"年"+(viewM+1)+"月"+d+"日 のシフト";
+  document.getElementById("mStart").value = sh?sh.start:"17:00";
+  document.getElementById("mEnd").value = sh?sh.end:"22:00";
+  document.getElementById("mBreak").value = sh&&sh.brk?sh.brk:"";
+  document.getElementById("mWage").value = sh&&sh.wage!=null?sh.wage:"";
+  document.getElementById("mDel").style.display = sh?"block":"none";
+  updatePreview();
+  ov.classList.add("show");
+}
+function updatePreview(){
+  const p=active(); if(!p) return;
+  const sh={start:document.getElementById("mStart").value, end:document.getElementById("mEnd").value,
+            brk:document.getElementById("mBreak").value, wage:document.getElementById("mWage").value};
+  if(!sh.start||!sh.end){ document.getElementById("mPreview").textContent=""; return; }
+  document.getElementById("mPreview").textContent="実働 "+shiftHours(sh).toFixed(1)+"時間 → "+yen(shiftPay(sh,p.wage));
+}
+["mStart","mEnd","mBreak","mWage"].forEach(id=>document.getElementById(id).addEventListener("input",updatePreview));
+document.getElementById("mClose").addEventListener("click", ()=>ov.classList.remove("show"));
+ov.addEventListener("click", e=>{ if(e.target===ov) ov.classList.remove("show"); });
+document.getElementById("mSave").addEventListener("click", ()=>{
+  const p=active(); if(!p||!editKey) return;
+  const start=document.getElementById("mStart").value, end=document.getElementById("mEnd").value;
+  if(!start||!end){ alert("開始と終了の時刻を入れてね"); return; }
+  const wv=document.getElementById("mWage").value;
+  p.shifts[editKey]={ start, end, brk:Number(document.getElementById("mBreak").value)||0, wage: wv===""?null:Number(wv) };
+  save(); ov.classList.remove("show"); renderAll();
+});
+document.getElementById("mDel").addEventListener("click", ()=>{
+  const p=active(); if(!p||!editKey) return;
+  delete p.shifts[editKey]; save(); ov.classList.remove("show"); renderAll();
+});
+
+/* ---- 初期化 ---- */
+if(!state.active && state.profiles.length) state.active=state.profiles[0].id;
+renderHead(); renderProfiles(); renderAll();
+</script>
+</body>
+</html>
